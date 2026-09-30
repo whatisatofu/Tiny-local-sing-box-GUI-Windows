@@ -37,6 +37,12 @@ A lightweight Windows HTML Application (HTA) interface and configuration control
 
 ---
 
+## 🔒 Permissions & Security Notice
+
+* **Standard User GUI Execution**: The HTA control window launches as a standard, non-administrative application.
+* **On-Demand Privileges (`runas`)**: Starting `sing-box` (specifically when using TUN mode or modifying system routing tables) requires elevated rights. Windows UAC will request Administrator approval **only when you click "▶ Start VPN" or "⏹ Stop VPN"**.
+
+---
 ## 🚀 Getting Started
 
 1. **Launch Application**: Double-click the `.hta` script file to open the control window.
