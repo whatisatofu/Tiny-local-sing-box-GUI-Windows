@@ -1,0 +1,197 @@
+<!-- HTA HEADER START -->
+<hta:application id="oHTA" applicationname="sb_gui_ini_zh" border="thin" maximizebutton="no" minimizebutton="yes" scroll="no" singleinstance="yes" />
+<!-- HTA HEADER END -->
+<!DOCTYPE html>
+<html>
+<head>
+    <title>sing-box 本地控制台 (INI)</title>
+    <meta http-equiv="x-ua-compatible" content="ie=edge">
+    <meta charset="UTF-8">
+    <style>
+        body { font-family: 'Segoe UI', Microsoft JhengHei, sans-serif; background-color: #f3f4f6; margin: 0; padding: 20px; text-align: center; user-select: none; }
+        .container { background-color: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05); }
+        h2 { margin-top: 0; color: #1f2937; font-size: 1.2rem; }
+        .status-box { margin: 15px 0; padding: 8px; border-radius: 6px; font-weight: bold; background-color: #f9fafb; font-size: 0.9rem; }
+        .current-config { font-size: 0.8rem; color: #4b5563; margin-bottom: 12px; word-break: break-all; background: #f3f4f6; padding: 6px; border-radius: 4px; }
+        .btn { display: block; width: 100%; padding: 10px; margin: 8px 0; border: none; border-radius: 6px; font-size: 0.95rem; font-weight: bold; cursor: pointer; }
+        .btn-start { background-color: #10b981; color: white; }
+        .btn-start:hover { background-color: #059669; }
+        .btn-stop { background-color: #ef4444; color: white; }
+        .btn-stop:hover { background-color: #dc2626; }
+        .btn-select { background-color: #f59e0b; color: white; }
+        .btn-select:hover { background-color: #d97706; }
+    </style>
+    <script language="JavaScript">
+        var fso = new ActiveXObject("Scripting.FileSystemObject");
+        var shell = new ActiveXObject("WScript.Shell");
+        
+        var currentHtaDir = "";
+        var iniPath = "";
+        var resolvedConfigPath = "";
+
+        window.onload = function() {
+            window.resizeTo(450, 700);
+            
+            // 獲取當前 HTA 所在的資料夾路徑
+            var htaPath = window.location.pathname;
+            if (htaPath.charAt(0) === "/" || htaPath.charAt(0) === "\\") { htaPath = htaPath.substring(1); }
+            htaPath = decodeURIComponent(htaPath.replace(/\//g, "\\"));
+            currentHtaDir = htaPath.substring(0, htaPath.lastIndexOf("\\"));
+            iniPath = currentHtaDir + "\\gui_config.ini";
+
+            LoadConfigFromIni();
+            CheckStatus();
+            ShowShortName();
+
+            // 首次啟動引導
+            if (resolvedConfigPath === "") {
+                alert("歡迎使用！請先選取您的 sing-box 配置 JSON 檔案。");
+                SelectAndTargetConfig();
+            }
+        };
+
+        // 從 INI 檔案讀取設定檔路徑
+        function LoadConfigFromIni() {
+            if (fso.FileExists(iniPath)) {
+                try {
+                    var stream = new ActiveXObject("ADODB.Stream");
+                    stream.Type = 2; 
+                    stream.Charset = "utf-8";
+                    stream.Open();
+                    stream.LoadFromFile(iniPath);
+                    var content = stream.ReadText();
+                    stream.Close();
+
+                    var match = content.match(/target\s*=\s*(.*)/);
+                    if (match && match[1]) {
+                        var rawPath = match[1].replace(/^\s+|\s+$/g, ""); 
+                        resolvedConfigPath = shell.ExpandEnvironmentStrings(rawPath);
+                    }
+                } catch(e) {
+                    resolvedConfigPath = "";
+                }
+            }
+        }
+
+        // 將選取的路徑直白寫入 INI 檔案
+        function SaveConfigToIni(fullPath) {
+            try {
+                var stream = new ActiveXObject("ADODB.Stream");
+                stream.Type = 2;
+                stream.Charset = "utf-8";
+                stream.Open();
+                stream.WriteText("[Settings]\r\ntarget = " + fullPath + "\r\n");
+                stream.SaveToFile(iniPath, 2); 
+                stream.Close();
+                return true;
+            } catch(e) {
+                alert("寫入 INI 配置文件失敗: " + e.message);
+                return false;
+            }
+        }
+
+        function ShowShortName() {
+            if (resolvedConfigPath === "") {
+                document.getElementById("currentConfigLabel").innerHTML = "<span style='color:#ef4444;'>未載入任何配置</span>";
+                return;
+            }
+            try {
+                var fileName = resolvedConfigPath.substring(resolvedConfigPath.lastIndexOf("\\") + 1);
+                document.getElementById("currentConfigLabel").innerText = "當前配置: " + fileName;
+            } catch(e) {
+                document.getElementById("currentConfigLabel").innerText = "當前配置: 無";
+            }
+        }
+
+        function CheckStatus() {
+            try {
+                var locator = new ActiveXObject("WbemScripting.SWbemLocator");
+                var service = locator.ConnectServer(".", "root\\cimv2");
+                var processes = service.ExecQuery("Select * from Win32_Process Where Name = 'sing-box.exe'");
+                if (processes.Count > 0) {
+                    document.getElementById("status").innerHTML = "<span style='color:#10b981;'>🟢 狀態：連線中 (Running)</span>";
+                } else {
+                    document.getElementById("status").innerHTML = "<span style='color:#ef4444;'>🔴 狀態：已關閉 (Stopped)</span>";
+                }
+            } catch(e) {
+                document.getElementById("status").innerHTML = "❌ 無法偵測狀態";
+            }
+        }
+
+        function StartVPN() {
+            if (resolvedConfigPath === "" || !fso.FileExists(resolvedConfigPath)) {
+                alert("請先選擇一個有效的配置檔案！");
+                SelectAndTargetConfig();
+                return;
+            }
+            try {
+                var targetDir = resolvedConfigPath.substring(0, resolvedConfigPath.lastIndexOf("\\"));
+                var logFile = targetDir + "\\check_log.txt";
+                var checkCmd = "cmd /c sing-box check -c \"" + resolvedConfigPath + "\" > \"" + logFile + "\" 2>&1";
+                var exitCode = shell.Run(checkCmd, 0, true);
+
+                if (exitCode !== 0) {
+                    var errorMsg = "❌ 配置檔案語法檢查失敗！無法啟動。\n\n";
+                    if (fso.FileExists(logFile)) {
+                        var ts = fso.OpenTextFile(logFile, 1);
+                        errorMsg += ts.ReadAll();
+                        ts.Close();
+                    } else { errorMsg += "未知語法錯誤，請檢查 JSON 格式是否正確。"; }
+                    alert(errorMsg);
+                    return; 
+                }
+                var UAccess = new ActiveXObject("Shell.Application");
+                var cmdArgs = "/c sing-box run -c \"" + resolvedConfigPath + "\"";
+                UAccess.ShellExecute("cmd.exe", cmdArgs, "", "runas", 0);
+                setTimeout(CheckStatus, 1500);
+            } catch(e) { alert("執行預檢時發生錯誤: " + e.message); }
+        }
+
+        function StopVPN() {
+            try {
+                var UAccess = new ActiveXObject("Shell.Application");
+                UAccess.ShellExecute("taskkill", "/f /im sing-box.exe", "", "runas", 0);
+                setTimeout(CheckStatus, 1000);
+            } catch(e) { alert("無法關閉進程！"); }
+        }
+
+        function SelectAndTargetConfig() {
+            try { document.getElementById("hiddenFileInput").click(); } 
+            catch(e) { alert("無法開啟檔案選取視窗: " + e.message); }
+        }
+
+        function handleFileSelect() {
+            var fileInput = document.getElementById("hiddenFileInput");
+            var selectedFilePath = fileInput.value;
+            if (!selectedFilePath) return;
+
+            selectedFilePath = selectedFilePath.replace(/\//g, "\\");
+            
+            if (selectedFilePath.substring(selectedFilePath.length - 5).toLowerCase() !== ".json") {
+                alert("錯誤：請選擇副檔名為 .json 的設定檔！");
+                fileInput.value = "";
+                return;
+            }
+
+            if (SaveConfigToIni(selectedFilePath)) {
+                alert("成功記憶配置路徑至 gui_config.ini！");
+                resolvedConfigPath = selectedFilePath;
+                ShowShortName();
+                CheckStatus();
+            }
+            fileInput.value = ""; 
+        }
+    </script>
+</head>
+<body>
+<div class="container">
+    <h2>sing-box 控制面板</h2>
+    <div id="status" class="status-box">🔍 正在偵測狀態...</div>
+    <div id="currentConfigLabel" class="current-config">當前配置: 載入中...</div>
+    <button class="btn btn-start" onclick="StartVPN()">▶ 啟動 VPN (Start)</button>
+    <button class="btn btn-stop" onclick="StopVPN()">⏹ 關閉 VPN (Stop)</button>
+    <button class="btn btn-select" onclick="SelectAndTargetConfig()">📂 選擇/變更配置 (.json)</button>
+    <input type="file" id="hiddenFileInput" style="display:none;" accept=".json" onchange="handleFileSelect()" />
+</div>
+</body>
+</html>
