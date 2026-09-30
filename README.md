@@ -29,6 +29,10 @@ A lightweight Windows HTML Application (HTA) interface and configuration control
 
 * **Operating System**: Microsoft Windows (supports HTA and ActiveX/WMI components).
 * **Core Binary**: `sing-box.exe` must be installed and available in the system execution PATH or the working directory.
+* ```powershell
+  # Run this in powershell to install sing-box easily, although you should already have one, I suppose
+  winget install sing-box
+  ```
 * **Permissions**: Administrative privileges are required to run network services and manage background processes.
 
 ---
