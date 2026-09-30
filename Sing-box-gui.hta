@@ -166,6 +166,8 @@
             var selectedFilePath = fileInput.value;
             if (!selectedFilePath) return;
 
+            selectedFilePath = selectedFilePath.replace(/\//g, "\\");
+
             if (selectedFilePath.substring(selectedFilePath.length - 5).toLowerCase() !== ".json") {
                 alert("Error: Please select a file ending with '.json'!");
                 fileInput.value = "";
